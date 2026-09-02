@@ -28,7 +28,9 @@ Slow wheel movement produces gentle, precise scrolling. Fast or repeated scrolli
 - **Universal application compatibility** — Win32, Chrome, Edge, Firefox, Electron, VS Code, terminals, everything
 - **Zero configuration required** — `SmoothScroll.ini` is auto-created with sane defaults on first run
 - **Built-in settings window** — choose a preset or tune every value from the tray icon
+- **Japanese UI support** — menus, settings, notifications, and validation messages automatically follow the Windows display language
 - **Per-application profiles** — automatically use different scroll behavior for each executable
+- **Per-application disable switch** — leave selected applications on completely native Windows scrolling
 - **Live tuning** — GUI changes apply immediately; direct `.ini` editing remains available
 - **Lightweight** — pure AutoHotkey v2, no dependencies, no background services
 
@@ -107,6 +109,10 @@ velTimeout = 600
 
 Right-click the tray icon and choose **Settings...** to edit these values in the built-in GUI. The **Gentle**, **Balanced**, and **Floaty** presets provide useful starting points; **Save & Apply** writes the values to `SmoothScroll.ini` and applies them immediately without restarting.
 
+### Display language
+
+Open the tray menu and choose **Language** to select **Automatic (Windows setting)**, **Japanese**, or **English**. The choice is saved in `SmoothScroll.ini` and remains active after restarting the application. Automatic mode uses Japanese when the Windows language is Japanese and English otherwise.
+
 ### Per-application profiles
 
 The settings window detects the executable names of currently running applications. To create an application-specific profile:
@@ -115,6 +121,8 @@ The settings window detects the executable names of currently running applicatio
 2. Open **Settings...** from the Smooth Scroll tray icon.
 3. Select the executable under **Create a profile for a running application** and click **Create application profile**.
 4. Adjust its values or choose a preset, then click **Save & Apply**.
+
+Enable **Disable for this app** when an application should bypass Smooth Scroll completely. Its wheel input is then left untouched and uses the application's normal Windows scrolling behavior. Clear the checkbox and save again to restore acceleration for that application.
 
 Whenever the mouse wheel is used, Smooth Scroll identifies the executable under the cursor and applies its profile automatically. Applications without a profile use **Default (all applications)**. Momentum is reset when moving between applications so one application's scroll state does not leak into another.
 
