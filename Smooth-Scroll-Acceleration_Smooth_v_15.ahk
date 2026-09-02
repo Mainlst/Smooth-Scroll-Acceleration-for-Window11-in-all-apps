@@ -45,7 +45,7 @@
 ;    - Acceleration + combo physics ✓
 ;
 ;  CONFIG: SmoothScroll.ini auto-created next to the script.
-;  Right-click tray icon > Reload to apply changes.
+;  Right-click the tray icon > Settings... to edit and apply changes.
 ; =====================================================================
 
 ; ---- Coordinate mode: screen coords for all mouse operations ----
@@ -73,6 +73,25 @@ global g_velocity := 0.0
 
 ; ---- Config ----
 global g_ini := A_ScriptDir "\SmoothScroll.ini"
+global g_settingsGui := 0
+global g_settingControls := Map()
+
+DefaultSettings() {
+    return Map(
+        "baseNotches", 1.5,
+        "maxNotches", 10.0,
+        "comboStep", 0.3,
+        "maxCombo", 3.0,
+        "comboWindow", 250,
+        "friction", 0.83,
+        "minDebt", 0.02,
+        "frameMs", 8,
+        "velInfluence", 0.35,
+        "velSmoothing", 0.45,
+        "velCap", 2.5,
+        "velTimeout", 600
+    )
+}
 
 CfgF(key, default) {
     try {
@@ -95,18 +114,19 @@ ReloadConfig() {
     global g_baseNotches, g_maxNotches, g_comboStep, g_maxCombo
     global g_comboWindow, g_friction, g_minDebt, g_frameMs
     global g_velInfluence, g_velSmoothing, g_velCap, g_velTimeout
-    g_baseNotches  := CfgF("baseNotches",  2.0)
-    g_maxNotches   := CfgF("maxNotches",   14.0)
-    g_comboStep    := CfgF("comboStep",    0.5)
-    g_maxCombo     := CfgF("maxCombo",     4.0)
-    g_comboWindow  := CfgI("comboWindow",  280)
-    g_friction     := CfgF("friction",     0.86)
-    g_minDebt      := CfgF("minDebt",      0.01)
-    g_frameMs      := CfgI("frameMs",      8)
-    g_velInfluence := CfgF("velInfluence", 0.35)
-    g_velSmoothing := CfgF("velSmoothing", 0.45)
-    g_velCap       := CfgF("velCap",       2.5)
-    g_velTimeout   := CfgI("velTimeout",   600)
+    defaults := DefaultSettings()
+    g_baseNotches  := CfgF("baseNotches",  defaults["baseNotches"])
+    g_maxNotches   := CfgF("maxNotches",   defaults["maxNotches"])
+    g_comboStep    := CfgF("comboStep",    defaults["comboStep"])
+    g_maxCombo     := CfgF("maxCombo",     defaults["maxCombo"])
+    g_comboWindow  := CfgI("comboWindow",  defaults["comboWindow"])
+    g_friction     := CfgF("friction",     defaults["friction"])
+    g_minDebt      := CfgF("minDebt",      defaults["minDebt"])
+    g_frameMs      := CfgI("frameMs",      defaults["frameMs"])
+    g_velInfluence := CfgF("velInfluence", defaults["velInfluence"])
+    g_velSmoothing := CfgF("velSmoothing", defaults["velSmoothing"])
+    g_velCap       := CfgF("velCap",       defaults["velCap"])
+    g_velTimeout   := CfgI("velTimeout",   defaults["velTimeout"])
     TrayTip("Smooth Scroll", "Config reloaded from SmoothScroll.ini", 2)
 }
 
@@ -329,18 +349,184 @@ if !FileExist(g_ini) {
     FileAppend(iniText, g_ini)
 }
 
-global g_baseNotches  := CfgF("baseNotches",  2.0)
-global g_maxNotches   := CfgF("maxNotches",   14.0)
-global g_comboStep    := CfgF("comboStep",    0.5)
-global g_maxCombo     := CfgF("maxCombo",     4.0)
-global g_comboWindow  := CfgI("comboWindow",  280)
-global g_friction     := CfgF("friction",     0.86)
-global g_minDebt      := CfgF("minDebt",      0.01)
-global g_frameMs      := CfgI("frameMs",      8)
-global g_velInfluence := CfgF("velInfluence", 0.35)
-global g_velSmoothing := CfgF("velSmoothing", 0.45)
-global g_velCap       := CfgF("velCap",       2.5)
-global g_velTimeout   := CfgI("velTimeout",   600)
+global g_defaults     := DefaultSettings()
+global g_baseNotches  := CfgF("baseNotches",  g_defaults["baseNotches"])
+global g_maxNotches   := CfgF("maxNotches",   g_defaults["maxNotches"])
+global g_comboStep    := CfgF("comboStep",    g_defaults["comboStep"])
+global g_maxCombo     := CfgF("maxCombo",     g_defaults["maxCombo"])
+global g_comboWindow  := CfgI("comboWindow",  g_defaults["comboWindow"])
+global g_friction     := CfgF("friction",     g_defaults["friction"])
+global g_minDebt      := CfgF("minDebt",      g_defaults["minDebt"])
+global g_frameMs      := CfgI("frameMs",      g_defaults["frameMs"])
+global g_velInfluence := CfgF("velInfluence", g_defaults["velInfluence"])
+global g_velSmoothing := CfgF("velSmoothing", g_defaults["velSmoothing"])
+global g_velCap       := CfgF("velCap",       g_defaults["velCap"])
+global g_velTimeout   := CfgI("velTimeout",   g_defaults["velTimeout"])
+
+; =====================================================================
+;  Settings GUI
+; =====================================================================
+SettingDefinitions() {
+    return [
+        ["baseNotches",  "Slow scroll amount",       "Normal wheel notches per click",       0.1, 20.0, false],
+        ["maxNotches",   "Maximum scroll amount",    "Hard limit per wheel click",           1.0, 100.0, false],
+        ["comboStep",    "Momentum build-up",        "Boost added by each rapid click",      0.0, 5.0, false],
+        ["maxCombo",     "Maximum momentum",         "Maximum combo multiplier",             1.0, 20.0, false],
+        ["comboWindow",  "Combo interval (ms)",      "Time in which clicks build momentum",  50, 2000, true],
+        ["friction",     "Glide / friction",         "Higher values glide for longer",       0.5, 0.99, false],
+        ["minDebt",      "Stop threshold",           "Higher values stop the tail earlier",  0.001, 1.0, false],
+        ["frameMs",      "Frame interval (ms)",      "8 = ~120 Hz, 16 = ~60 Hz",             1, 100, true],
+        ["velInfluence", "Speed influence",          "How strongly wheel speed accelerates", 0.0, 5.0, false],
+        ["velSmoothing", "Speed smoothing",          "Higher values react more gradually",   0.0, 0.99, false],
+        ["velCap",       "Maximum speed boost",      "Limit for speed-based acceleration",   0.0, 20.0, false],
+        ["velTimeout",   "Speed reset delay (ms)",   "Pause before speed memory is cleared", 50, 5000, true]
+    ]
+}
+
+ReadCurrentSettings() {
+    defaults := DefaultSettings()
+    values := Map()
+    for definition in SettingDefinitions() {
+        key := definition[1]
+        values[key] := definition[6] ? CfgI(key, defaults[key]) : CfgF(key, defaults[key])
+    }
+    return values
+}
+
+PresetSettings(name) {
+    switch name {
+        case "Gentle":
+            return Map("baseNotches", 1.0, "maxNotches", 6.0, "comboStep", 0.2, "maxCombo", 2.0,
+                "comboWindow", 200, "friction", 0.80, "minDebt", 0.02, "frameMs", 8,
+                "velInfluence", 0.2, "velSmoothing", 0.6, "velCap", 1.5, "velTimeout", 400)
+        case "Floaty":
+            return Map("baseNotches", 3.0, "maxNotches", 20.0, "comboStep", 0.8, "maxCombo", 6.0,
+                "comboWindow", 350, "friction", 0.92, "minDebt", 0.005, "frameMs", 8,
+                "velInfluence", 0.5, "velSmoothing", 0.3, "velCap", 4.0, "velTimeout", 800)
+        default:
+            return DefaultSettings()
+    }
+}
+
+FillSettingsForm(values) {
+    global g_settingControls
+    for key, value in values
+        g_settingControls[key].Value := value
+}
+
+ApplySettingsPreset(name, *) {
+    FillSettingsForm(PresetSettings(name))
+}
+
+ParseSetting(definition) {
+    global g_settingControls
+    key := definition[1]
+    label := definition[2]
+    minimum := definition[4]
+    maximum := definition[5]
+    isInteger := definition[6]
+    raw := Trim(g_settingControls[key].Value)
+
+    pattern := isInteger ? "^\d+$" : "^(?:\d+(?:\.\d*)?|\.\d+)$"
+    if !RegExMatch(raw, pattern)
+        throw Error(label " must be a valid " (isInteger ? "whole number." : "number."))
+
+    value := isInteger ? Integer(raw) : Float(raw)
+    if (value < minimum || value > maximum)
+        throw Error(label " must be between " minimum " and " maximum ".")
+    return value
+}
+
+SaveSettings(*) {
+    global g_ini
+    try {
+        values := Map()
+        for definition in SettingDefinitions()
+            values[definition[1]] := ParseSetting(definition)
+
+        if (values["maxNotches"] < values["baseNotches"])
+            throw Error("Maximum scroll amount must be at least the slow scroll amount.")
+
+        for key, value in values
+            IniWrite(value, g_ini, "Settings", key)
+
+        ReloadConfig()
+        FillSettingsForm(ReadCurrentSettings())
+        MsgBox("Settings were saved and applied immediately.", "Smooth Scroll", "Iconi")
+    } catch as err {
+        MsgBox(err.Message, "Invalid setting", "Iconx")
+    }
+}
+
+ResetSettings(*) {
+    answer := MsgBox("Restore all fields to the Balanced defaults?`n`nChanges are not saved until you click Save && Apply.",
+        "Restore defaults", "YesNo Icon?")
+    if (answer = "Yes")
+        FillSettingsForm(DefaultSettings())
+}
+
+HideSettings(*) {
+    global g_settingsGui
+    g_settingsGui.Hide()
+}
+
+ShowSettings(*) {
+    global g_settingsGui, g_settingControls
+
+    if IsObject(g_settingsGui) {
+        FillSettingsForm(ReadCurrentSettings())
+        g_settingsGui.Show()
+        return
+    }
+
+    g_settingsGui := Gui("+MinSize640x560", "Smooth Scroll Settings")
+    g_settingsGui.SetFont("s9", "Segoe UI")
+    g_settingsGui.OnEvent("Close", HideSettings)
+    g_settingsGui.OnEvent("Escape", HideSettings)
+
+    g_settingsGui.SetFont("s15 w600")
+    g_settingsGui.AddText("xm ym", "Smooth Scroll Settings")
+    g_settingsGui.SetFont("s9 w400")
+    g_settingsGui.AddText("xm y+4 c666666", "Choose a preset or fine-tune individual values. Save && Apply updates scrolling without restarting.")
+
+    g_settingsGui.AddGroupBox("xm y+16 w610 h62", "Presets")
+    gentleButton := g_settingsGui.AddButton("xp+14 yp+24 w105", "Gentle")
+    balancedButton := g_settingsGui.AddButton("x+10 w105", "Balanced")
+    floatyButton := g_settingsGui.AddButton("x+10 w105", "Floaty")
+    gentleButton.OnEvent("Click", ApplySettingsPreset.Bind("Gentle"))
+    balancedButton.OnEvent("Click", ApplySettingsPreset.Bind("Balanced"))
+    floatyButton.OnEvent("Click", ApplySettingsPreset.Bind("Floaty"))
+
+    g_settingControls := Map()
+    definitions := SettingDefinitions()
+    loop 2 {
+        column := A_Index
+        startX := column = 1 ? 20 : 330
+        rowStart := column = 1 ? 1 : 7
+        rowEnd := column = 1 ? 6 : 12
+        y := 135
+        loop rowEnd - rowStart + 1 {
+            definition := definitions[rowStart + A_Index - 1]
+            key := definition[1]
+            g_settingsGui.SetFont("s9 w600")
+            g_settingsGui.AddText("x" startX " y" y " w195", definition[2])
+            g_settingsGui.SetFont("s9 w400")
+            g_settingControls[key] := g_settingsGui.AddEdit("x" (startX + 205) " y" (y - 3) " w75", "")
+            g_settingsGui.AddText("x" startX " y+2 w280 c666666", definition[3])
+            y += 62
+        }
+    }
+
+    saveButton := g_settingsGui.AddButton("xm y510 w130 h34 Default", "Save && Apply")
+    resetButton := g_settingsGui.AddButton("x+10 w130 h34", "Restore defaults")
+    cancelButton := g_settingsGui.AddButton("x+210 w130 h34", "Close")
+    saveButton.OnEvent("Click", SaveSettings)
+    resetButton.OnEvent("Click", ResetSettings)
+    cancelButton.OnEvent("Click", HideSettings)
+
+    FillSettingsForm(ReadCurrentSettings())
+    g_settingsGui.Show("w650 h560")
+}
 
 ; =====================================================================
 ;  PostWheelMsg — inject WM_MOUSEWHEEL directly into a window's queue
@@ -493,6 +679,9 @@ AnimateScroll() {
 ; =====================================================================
 ;  Tray menu
 ; =====================================================================
+A_TrayMenu.Add("Settings...", ShowSettings)
+A_TrayMenu.Default := "Settings..."
+A_TrayMenu.Add()
 A_TrayMenu.Add("Reload Config", (*) => ReloadConfig())
 A_TrayMenu.Add("Edit Config", (*) => Run("notepad.exe `"" g_ini "`""))
 A_TrayMenu.Add()

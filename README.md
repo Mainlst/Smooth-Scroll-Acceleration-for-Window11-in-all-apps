@@ -27,7 +27,8 @@ Slow wheel movement produces gentle, precise scrolling. Fast or repeated scrolli
 - **Works on all monitors in a multi-monitor setup** — hover-to-scroll on any inactive screen
 - **Universal application compatibility** — Win32, Chrome, Edge, Firefox, Electron, VS Code, terminals, everything
 - **Zero configuration required** — `SmoothScroll.ini` is auto-created with sane defaults on first run
-- **Live tuning** — edit the `.ini`, right-click the tray icon → Reload
+- **Built-in settings window** — choose a preset or tune every value from the tray icon
+- **Live tuning** — GUI changes apply immediately; direct `.ini` editing remains available
 - **Lightweight** — pure AutoHotkey v2, no dependencies, no background services
 
 ---
@@ -45,7 +46,7 @@ A genuine synthesized OS input event (`Send("{WheelUp/Down 1}")`) is injected di
 The remaining scroll budget (based on velocity and combo) is drained by a high-frequency animation timer (~8 ms frames) using direct `WM_MOUSEWHEEL` message injection with fractional deltas. This produces the pixel-level smooth glide after the initial notch.
 
 ### Scroll Combo
-A momentum multiplier that grows when you scroll repeatedly within a short time window (default: 280 ms). Each rapid notch adds `+0.5×` to the multiplier, up to a cap of `4×`. If you pause, the combo resets to `1×` on the next notch.
+A momentum multiplier that grows when you scroll repeatedly within a short time window (default: 250 ms). Each rapid notch adds `+0.3×` to the multiplier, up to a cap of `3×`. If you pause, the combo resets to `1×` on the next notch.
 
 ### Scroll Velocity
 Measures time between wheel notches and translates faster spinning into stronger acceleration. Combined with the combo multiplier, this produces an effect that feels proportional to physical intent — gentle flicks scroll a little, fast spins scroll a lot.
@@ -67,31 +68,45 @@ On first run, `SmoothScroll.ini` is created next to the script/executable with t
 
 ; Total notch budget per slow single click.
 ; 1.0 = same as one real notch.  2.0 = double.
-baseNotches = 2.0
+baseNotches = 1.5
 
 ; Hard cap on notch budget per click.
-maxNotches = 14.0
+maxNotches = 10.0
 
 ; Combo multiplier growth per rapid click.
-comboStep = 0.5
+comboStep = 0.3
 
 ; Maximum combo multiplier.
-maxCombo = 4.0
+maxCombo = 3.0
 
 ; Clicks faster than this (ms) build the combo.
-comboWindow = 280
+comboWindow = 250
 
 ; Momentum friction per frame. 0.78=snappy  0.86=balanced  0.92=floaty
-friction = 0.86
+friction = 0.83
 
 ; Stop animating when debt drops below this (notches).
-minDebt = 0.01
+minDebt = 0.02
 
 ; Animation timer interval ms. Lower = smoother, higher = lighter CPU.
 frameMs = 8
+
+; How strongly wheel speed amplifies scrolling.
+velInfluence = 0.35
+
+; Higher values smooth speed changes more heavily.
+velSmoothing = 0.45
+
+; Maximum velocity contribution.
+velCap = 2.5
+
+; Pause in ms before velocity memory resets.
+velTimeout = 600
 ```
 
-Edit any value, then **right-click the tray icon → Reload** to apply. Delete the file to reset to built-in defaults.
+Right-click the tray icon and choose **Settings...** to edit these values in the built-in GUI. The **Gentle**, **Balanced**, and **Floaty** presets provide useful starting points; **Save & Apply** writes the values to `SmoothScroll.ini` and applies them immediately without restarting.
+
+Direct `.ini` editing is still supported: edit any value, then right-click the tray icon → **Reload Config**. Delete the file to reset to built-in defaults.
 
 ---
 
@@ -106,7 +121,7 @@ To start automatically with Windows: place a shortcut to the `.exe` in your Star
 1. Install [AutoHotkey v2](https://www.autohotkey.com/)
 2. Double-click `Smooth-Scroll-Acceleration_Smooth_v_15.ahk` to run directly
 3. Or right-click → **Compile Script** to produce your own `.exe`
-4. Tune `SmoothScroll.ini` to taste
+4. Open **Settings...** from the tray icon, or tune `SmoothScroll.ini` directly
 
 ---
 
