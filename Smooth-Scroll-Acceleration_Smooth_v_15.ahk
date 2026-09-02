@@ -565,7 +565,7 @@ GetSelectedProfile() {
 }
 
 RefreshProfileSelector(selectedApp := "") {
-    global g_profileSelector, g_profileNames, g_profiles
+    global g_profileSelector, g_profileNames, g_profiles, g_disabledApps
     if !IsObject(g_profileSelector)
         return
 
@@ -574,7 +574,10 @@ RefreshProfileSelector(selectedApp := "") {
     g_profileNames := [""]
     selectedIndex := 1
     for appName, settings in g_profiles {
-        labels.Push(appName)
+        label := appName
+        if g_disabledApps.Has(appName)
+            label .= L(" (disabled)", "（無効）")
+        labels.Push(label)
         g_profileNames.Push(appName)
         if (appName = selectedApp)
             selectedIndex := labels.Length

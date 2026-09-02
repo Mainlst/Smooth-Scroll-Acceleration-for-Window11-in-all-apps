@@ -3,8 +3,8 @@
 # Smooth Scroll Acceleration for Windows 11
 ### *Physics-based smooth scroll with momentum and acceleration — works across all applications and all monitors*
 
-Download the latest release (Windows 64-bit binary or raw script):  
-[Smooth-Scroll-Acceleration-v15.10](https://github.com/MihaiCiprianChezan/Smooth-Scroll-Acceleration-for-Window11-in-all-apps/releases/tag/v.15.3)  
+Download a Windows 64-bit build from a completed workflow run:
+[Build Windows executable](https://github.com/Mainlst/Smooth-Scroll-Acceleration-for-Window11-in-all-apps/actions/workflows/build-windows.yml)
 *(Free / MIT License)*
 
 ---
@@ -135,7 +135,7 @@ Direct `.ini` editing is still supported: edit any value, then right-click the t
 ## Usage
 
 ### Option A — Run the binary
-Download `Smooth-Scroll-Acceleration.exe` from the [latest release](https://github.com/MihaiCiprianChezan/Smooth-Scroll-Acceleration-for-Window11-in-all-apps/releases/tag/v15.10) and run it. No installation needed.
+Download the `Smooth-Scroll-Acceleration-Windows-x64` artifact from a completed [Build Windows executable](https://github.com/Mainlst/Smooth-Scroll-Acceleration-for-Window11-in-all-apps/actions/workflows/build-windows.yml) workflow run, extract it, and run `Smooth-Scroll-Acceleration.exe`. No installation is needed.
 
 To start automatically with Windows: place a shortcut to the `.exe` in your Startup folder (`Win + R` → `shell:startup`).
 
