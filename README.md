@@ -28,6 +28,7 @@ Slow wheel movement produces gentle, precise scrolling. Fast or repeated scrolli
 - **Universal application compatibility** — Win32, Chrome, Edge, Firefox, Electron, VS Code, terminals, everything
 - **Zero configuration required** — `SmoothScroll.ini` is auto-created with sane defaults on first run
 - **Built-in settings window** — choose a preset or tune every value from the tray icon
+- **Per-application profiles** — automatically use different scroll behavior for each executable
 - **Live tuning** — GUI changes apply immediately; direct `.ini` editing remains available
 - **Lightweight** — pure AutoHotkey v2, no dependencies, no background services
 
@@ -105,6 +106,19 @@ velTimeout = 600
 ```
 
 Right-click the tray icon and choose **Settings...** to edit these values in the built-in GUI. The **Gentle**, **Balanced**, and **Floaty** presets provide useful starting points; **Save & Apply** writes the values to `SmoothScroll.ini` and applies them immediately without restarting.
+
+### Per-application profiles
+
+The settings window detects the executable names of currently running applications. To create an application-specific profile:
+
+1. Start the application you want to configure.
+2. Open **Settings...** from the Smooth Scroll tray icon.
+3. Select the executable under **Create a profile for a running application** and click **Create application profile**.
+4. Adjust its values or choose a preset, then click **Save & Apply**.
+
+Whenever the mouse wheel is used, Smooth Scroll identifies the executable under the cursor and applies its profile automatically. Applications without a profile use **Default (all applications)**. Momentum is reset when moving between applications so one application's scroll state does not leak into another.
+
+Profiles are stored in the same `SmoothScroll.ini` file under `[Profiles]` and `[Profile:application.exe]` sections.
 
 Direct `.ini` editing is still supported: edit any value, then right-click the tray icon → **Reload Config**. Delete the file to reset to built-in defaults.
 

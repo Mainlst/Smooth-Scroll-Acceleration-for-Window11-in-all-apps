@@ -75,6 +75,15 @@ global g_velocity := 0.0
 global g_ini := A_ScriptDir "\SmoothScroll.ini"
 global g_settingsGui := 0
 global g_settingControls := Map()
+global g_profileSelector := 0
+global g_runningAppSelector := 0
+global g_profileNames := []
+global g_profiles := Map()
+global g_defaultRuntimeSettings := Map()
+global g_activeApp := ""
+global g_previousApp := ""
+global g_activeFriction := 0.83
+global g_activeMinDebt := 0.02
 
 DefaultSettings() {
     return Map(
@@ -127,6 +136,7 @@ ReloadConfig() {
     g_velSmoothing := CfgF("velSmoothing", defaults["velSmoothing"])
     g_velCap       := CfgF("velCap",       defaults["velCap"])
     g_velTimeout   := CfgI("velTimeout",   defaults["velTimeout"])
+    RefreshSettingsCache()
     TrayTip("Smooth Scroll", "Config reloaded from SmoothScroll.ini", 2)
 }
 
@@ -363,6 +373,90 @@ global g_velSmoothing := CfgF("velSmoothing", g_defaults["velSmoothing"])
 global g_velCap       := CfgF("velCap",       g_defaults["velCap"])
 global g_velTimeout   := CfgI("velTimeout",   g_defaults["velTimeout"])
 
+CurrentDefaultSettings() {
+    global g_baseNotches, g_maxNotches, g_comboStep, g_maxCombo
+    global g_comboWindow, g_friction, g_minDebt, g_frameMs
+    global g_velInfluence, g_velSmoothing, g_velCap, g_velTimeout
+    return Map(
+        "baseNotches", g_baseNotches,
+        "maxNotches", g_maxNotches,
+        "comboStep", g_comboStep,
+        "maxCombo", g_maxCombo,
+        "comboWindow", g_comboWindow,
+        "friction", g_friction,
+        "minDebt", g_minDebt,
+        "frameMs", g_frameMs,
+        "velInfluence", g_velInfluence,
+        "velSmoothing", g_velSmoothing,
+        "velCap", g_velCap,
+        "velTimeout", g_velTimeout
+    )
+}
+
+NormalizeAppName(name) {
+    return StrLower(Trim(name))
+}
+
+LoadProfiles() {
+    global g_ini, g_profiles, g_defaultRuntimeSettings
+    profiles := Map()
+    try profileIndex := IniRead(g_ini, "Profiles")
+    catch
+        profileIndex := ""
+
+    loop parse profileIndex, "`n", "`r" {
+        separator := InStr(A_LoopField, "=")
+        if !separator
+            continue
+        appName := NormalizeAppName(SubStr(A_LoopField, 1, separator - 1))
+        enabled := Trim(SubStr(A_LoopField, separator + 1))
+        if (appName = "" || enabled != "1")
+            continue
+
+        section := "Profile:" appName
+        values := Map()
+        for definition in SettingDefinitions() {
+            key := definition[1]
+            fallback := g_defaultRuntimeSettings[key]
+            values[key] := definition[6] ? CfgProfileI(section, key, fallback) : CfgProfileF(section, key, fallback)
+        }
+        profiles[appName] := values
+    }
+    g_profiles := profiles
+}
+
+CfgProfileF(section, key, default) {
+    global g_ini
+    try return Float(Trim(IniRead(g_ini, section, key)))
+    catch
+        return default
+}
+
+CfgProfileI(section, key, default) {
+    global g_ini
+    try return Integer(Trim(IniRead(g_ini, section, key)))
+    catch
+        return default
+}
+
+RefreshSettingsCache() {
+    global g_defaultRuntimeSettings, g_previousApp
+    g_defaultRuntimeSettings := CurrentDefaultSettings()
+    LoadProfiles()
+    g_previousApp := ""
+}
+
+GetScrollSettings(hwnd) {
+    global g_profiles, g_defaultRuntimeSettings, g_activeApp
+    try appName := NormalizeAppName(WinGetProcessName("ahk_id " hwnd))
+    catch
+        appName := ""
+    g_activeApp := appName
+    return g_profiles.Has(appName) ? g_profiles[appName] : g_defaultRuntimeSettings
+}
+
+RefreshSettingsCache()
+
 ; =====================================================================
 ;  Settings GUI
 ; =====================================================================
@@ -391,6 +485,119 @@ ReadCurrentSettings() {
         values[key] := definition[6] ? CfgI(key, defaults[key]) : CfgF(key, defaults[key])
     }
     return values
+}
+
+GetSelectedProfile() {
+    global g_profileSelector, g_profileNames
+    if !IsObject(g_profileSelector)
+        return ""
+    index := g_profileSelector.Value
+    return (index >= 1 && index <= g_profileNames.Length) ? g_profileNames[index] : ""
+}
+
+RefreshProfileSelector(selectedApp := "") {
+    global g_profileSelector, g_profileNames, g_profiles
+    if !IsObject(g_profileSelector)
+        return
+
+    selectedApp := NormalizeAppName(selectedApp)
+    labels := ["Default (all applications)"]
+    g_profileNames := [""]
+    selectedIndex := 1
+    for appName, settings in g_profiles {
+        labels.Push(appName)
+        g_profileNames.Push(appName)
+        if (appName = selectedApp)
+            selectedIndex := labels.Length
+    }
+
+    g_profileSelector.Delete()
+    g_profileSelector.Add(labels)
+    g_profileSelector.Choose(selectedIndex)
+}
+
+RefreshRunningApps(*) {
+    global g_runningAppSelector
+    if !IsObject(g_runningAppSelector)
+        return
+
+    seen := Map()
+    appNames := []
+    for hwnd in WinGetList() {
+        try appName := NormalizeAppName(WinGetProcessName("ahk_id " hwnd))
+        catch
+            continue
+        if (appName = "" || seen.Has(appName))
+            continue
+        seen[appName] := true
+        appNames.Push(appName)
+    }
+
+    g_runningAppSelector.Delete()
+    if appNames.Length {
+        g_runningAppSelector.Add(appNames)
+        g_runningAppSelector.Choose(1)
+    } else {
+        g_runningAppSelector.Add(["No running applications found"])
+        g_runningAppSelector.Choose(1)
+    }
+}
+
+ProfileSelectionChanged(*) {
+    global g_profiles
+    appName := GetSelectedProfile()
+    if (appName != "" && g_profiles.Has(appName))
+        FillSettingsForm(g_profiles[appName])
+    else
+        FillSettingsForm(ReadCurrentSettings())
+}
+
+AddApplicationProfile(*) {
+    global g_ini, g_runningAppSelector, g_profiles
+    if !IsObject(g_runningAppSelector) || !g_runningAppSelector.Value
+        return
+    appName := NormalizeAppName(g_runningAppSelector.Text)
+    if (appName = "" || appName = "no running applications found")
+        return
+
+    if !g_profiles.Has(appName) {
+        try {
+            IniWrite(1, g_ini, "Profiles", appName)
+            for key, value in CurrentDefaultSettings()
+                IniWrite(value, g_ini, "Profile:" appName, key)
+            ReloadConfig()
+        } catch as err {
+            MsgBox(err.Message, "Could not create profile", "Iconx")
+            return
+        }
+    }
+
+    RefreshProfileSelector(appName)
+    ProfileSelectionChanged()
+}
+
+DeleteApplicationProfile(*) {
+    global g_ini
+    appName := GetSelectedProfile()
+    if (appName = "") {
+        MsgBox("The default profile cannot be deleted.", "Smooth Scroll", "Iconi")
+        return
+    }
+
+    answer := MsgBox("Delete the profile for " appName "?", "Delete application profile", "YesNo Icon?")
+    if (answer != "Yes")
+        return
+
+    try {
+        IniDelete(g_ini, "Profiles", appName)
+        IniDelete(g_ini, "Profile:" appName)
+        ReloadConfig()
+    } catch as err {
+        MsgBox(err.Message, "Could not delete profile", "Iconx")
+        return
+    }
+    RefreshProfileSelector()
+    ProfileSelectionChanged()
 }
 
 PresetSettings(name) {
@@ -447,22 +654,36 @@ SaveSettings(*) {
         if (values["maxNotches"] < values["baseNotches"])
             throw Error("Maximum scroll amount must be at least the slow scroll amount.")
 
+        appName := GetSelectedProfile()
+        section := appName = "" ? "Settings" : "Profile:" appName
+        if (appName != "")
+            IniWrite(1, g_ini, "Profiles", appName)
         for key, value in values
-            IniWrite(value, g_ini, "Settings", key)
+            IniWrite(value, g_ini, section, key)
 
         ReloadConfig()
-        FillSettingsForm(ReadCurrentSettings())
-        MsgBox("Settings were saved and applied immediately.", "Smooth Scroll", "Iconi")
+        RefreshProfileSelector(appName)
+        ProfileSelectionChanged()
+        target := appName = "" ? "the default profile" : appName
+        MsgBox("Settings for " target " were saved and applied immediately.", "Smooth Scroll", "Iconi")
     } catch as err {
         MsgBox(err.Message, "Invalid setting", "Iconx")
     }
 }
 
 ResetSettings(*) {
-    answer := MsgBox("Restore all fields to the Balanced defaults?`n`nChanges are not saved until you click Save && Apply.",
-        "Restore defaults", "YesNo Icon?")
+    appName := GetSelectedProfile()
+    if (appName = "") {
+        prompt := "Restore all fields to the built-in Balanced defaults?"
+        values := DefaultSettings()
+    } else {
+        prompt := "Copy the current default profile into the fields for " appName "?"
+        values := CurrentDefaultSettings()
+    }
+    answer := MsgBox(prompt "`n`nChanges are not saved until you click Save && Apply.",
+        "Restore settings", "YesNo Icon?")
     if (answer = "Yes")
-        FillSettingsForm(DefaultSettings())
+        FillSettingsForm(values)
 }
 
 HideSettings(*) {
@@ -471,15 +692,18 @@ HideSettings(*) {
 }
 
 ShowSettings(*) {
-    global g_settingsGui, g_settingControls
+    global g_settingsGui, g_settingControls, g_profileSelector, g_runningAppSelector
 
     if IsObject(g_settingsGui) {
-        FillSettingsForm(ReadCurrentSettings())
+        selectedApp := GetSelectedProfile()
+        RefreshProfileSelector(selectedApp)
+        RefreshRunningApps()
+        ProfileSelectionChanged()
         g_settingsGui.Show()
         return
     }
 
-    g_settingsGui := Gui("+MinSize640x560", "Smooth Scroll Settings")
+    g_settingsGui := Gui("+MinSize700x720", "Smooth Scroll Settings")
     g_settingsGui.SetFont("s9", "Segoe UI")
     g_settingsGui.OnEvent("Close", HideSettings)
     g_settingsGui.OnEvent("Escape", HideSettings)
@@ -487,9 +711,24 @@ ShowSettings(*) {
     g_settingsGui.SetFont("s15 w600")
     g_settingsGui.AddText("xm ym", "Smooth Scroll Settings")
     g_settingsGui.SetFont("s9 w400")
-    g_settingsGui.AddText("xm y+4 c666666", "Choose a preset or fine-tune individual values. Save && Apply updates scrolling without restarting.")
+    g_settingsGui.AddText("xm y+4 c666666", "Create per-application profiles or tune the default used by every other application.")
 
-    g_settingsGui.AddGroupBox("xm y+16 w610 h62", "Presets")
+    g_settingsGui.AddGroupBox("xm y+14 w680 h128", "Application profile")
+    g_settingsGui.AddText("x30 yp+23 w300", "Profile being edited")
+    g_profileSelector := g_settingsGui.AddDropDownList("x30 y+3 w300", ["Default (all applications)"])
+    deleteProfileButton := g_settingsGui.AddButton("x345 yp-1 w145", "Delete profile")
+
+    g_settingsGui.AddText("x30 y+15 w300", "Create a profile for a running application")
+    g_runningAppSelector := g_settingsGui.AddDropDownList("x30 y+3 w300", ["Scanning..."])
+    refreshAppsButton := g_settingsGui.AddButton("x345 yp-1 w100", "Refresh")
+    addProfileButton := g_settingsGui.AddButton("x455 yp w190", "Create application profile")
+
+    g_profileSelector.OnEvent("Change", ProfileSelectionChanged)
+    deleteProfileButton.OnEvent("Click", DeleteApplicationProfile)
+    refreshAppsButton.OnEvent("Click", RefreshRunningApps)
+    addProfileButton.OnEvent("Click", AddApplicationProfile)
+
+    g_settingsGui.AddGroupBox("xm y+14 w680 h62", "Presets for the selected profile")
     gentleButton := g_settingsGui.AddButton("xp+14 yp+24 w105", "Gentle")
     balancedButton := g_settingsGui.AddButton("x+10 w105", "Balanced")
     floatyButton := g_settingsGui.AddButton("x+10 w105", "Floaty")
@@ -501,10 +740,10 @@ ShowSettings(*) {
     definitions := SettingDefinitions()
     loop 2 {
         column := A_Index
-        startX := column = 1 ? 20 : 330
+        startX := column = 1 ? 20 : 360
         rowStart := column = 1 ? 1 : 7
         rowEnd := column = 1 ? 6 : 12
-        y := 135
+        y := 292
         loop rowEnd - rowStart + 1 {
             definition := definitions[rowStart + A_Index - 1]
             key := definition[1]
@@ -517,15 +756,17 @@ ShowSettings(*) {
         }
     }
 
-    saveButton := g_settingsGui.AddButton("xm y510 w130 h34 Default", "Save && Apply")
-    resetButton := g_settingsGui.AddButton("x+10 w130 h34", "Restore defaults")
-    cancelButton := g_settingsGui.AddButton("x+210 w130 h34", "Close")
+    saveButton := g_settingsGui.AddButton("xm y670 w130 h34 Default", "Save && Apply")
+    resetButton := g_settingsGui.AddButton("x+10 w160 h34", "Use default values")
+    cancelButton := g_settingsGui.AddButton("x+230 w130 h34", "Close")
     saveButton.OnEvent("Click", SaveSettings)
     resetButton.OnEvent("Click", ResetSettings)
     cancelButton.OnEvent("Click", HideSettings)
 
-    FillSettingsForm(ReadCurrentSettings())
-    g_settingsGui.Show("w650 h560")
+    RefreshProfileSelector()
+    RefreshRunningApps()
+    ProfileSelectionChanged()
+    g_settingsGui.Show("w700 h720")
 }
 
 ; =====================================================================
@@ -553,9 +794,7 @@ PostWheelMsg(hwnd, delta, x, y) {
 ScrollAccel(dir) {
     global g_debt, g_dir, g_timer, g_srcWin, g_srcX, g_srcY, g_srcL, g_srcT, g_srcR, g_srcB, g_gen
     global g_lastTick, g_combo, g_velocity
-    global g_baseNotches, g_maxNotches, g_comboStep, g_maxCombo
-    global g_comboWindow, g_frameMs
-    global g_velInfluence, g_velSmoothing, g_velCap, g_velTimeout
+    global g_activeApp, g_previousApp, g_activeFriction, g_activeMinDebt
 
     now   := A_TickCount
     delta := now - g_lastTick
@@ -570,6 +809,26 @@ ScrollAccel(dir) {
     ; over the same window — more reliable than HWND equality, which can
     ; change after Send() shifts focus on non-primary monitors.
     MouseGetPos(&mx, &my, &hWin)
+    settings := GetScrollSettings(hWin)
+    if (g_activeApp != g_previousApp) {
+        g_debt := 0.0
+        g_combo := 1.0
+        g_velocity := 0.0
+        delta := 0
+        g_previousApp := g_activeApp
+    }
+    baseNotches := settings["baseNotches"]
+    maxNotches := settings["maxNotches"]
+    comboStep := settings["comboStep"]
+    maxCombo := settings["maxCombo"]
+    comboWindow := settings["comboWindow"]
+    frameMs := settings["frameMs"]
+    velInfluence := settings["velInfluence"]
+    velSmoothing := settings["velSmoothing"]
+    velCap := settings["velCap"]
+    velTimeout := settings["velTimeout"]
+    g_activeFriction := settings["friction"]
+    g_activeMinDebt := settings["minDebt"]
     g_srcWin := hWin
     g_srcX   := mx
     g_srcY   := my
@@ -588,23 +847,23 @@ ScrollAccel(dir) {
     g_dir := dir
 
     ; Combo build
-    if (delta > 0 && delta < g_comboWindow)
-        g_combo := Min(g_combo + g_comboStep, g_maxCombo)
+    if (delta > 0 && delta < comboWindow)
+        g_combo := Min(g_combo + comboStep, maxCombo)
     else
         g_combo := 1.0
 
     ; Velocity tracking
-    if (delta > 0 && delta < g_velTimeout) {
+    if (delta > 0 && delta < velTimeout) {
         spd        := 300.0 / delta
-        g_velocity := g_velocity * g_velSmoothing + spd * (1.0 - g_velSmoothing)
+        g_velocity := g_velocity * velSmoothing + spd * (1.0 - velSmoothing)
     } else {
         g_velocity := 0.0
     }
 
     ; Budget calculation
-    velContrib := Min(g_velocity, g_velCap)
-    budget     := g_baseNotches * g_combo * (1.0 + velContrib * g_velInfluence)
-    budget     := Min(budget, g_maxNotches)
+    velContrib := Min(g_velocity, velCap)
+    budget     := baseNotches * g_combo * (1.0 + velContrib * velInfluence)
+    budget     := Min(budget, maxNotches)
 
     ; LAYER 1: Send() re-injects a genuine OS input event.
     ; Windows routes it to the window under the cursor on any monitor,
@@ -619,9 +878,9 @@ ScrollAccel(dir) {
 
     SetTimer(AnimateScroll, 0)
     g_timer := false
-    if g_debt > g_minDebt {
+    if g_debt > g_activeMinDebt {
         g_timer := true
-        SetTimer(AnimateScroll, g_frameMs)
+        SetTimer(AnimateScroll, frameMs)
     }
 }
 
@@ -630,7 +889,7 @@ ScrollAccel(dir) {
 ; =====================================================================
 AnimateScroll() {
     global g_debt, g_dir, g_timer, g_srcWin, g_srcL, g_srcT, g_srcR, g_srcB, g_gen
-    global g_friction, g_minDebt
+    global g_activeFriction, g_activeMinDebt
 
     myGen := g_gen
 
@@ -650,14 +909,14 @@ AnimateScroll() {
         return
     }
 
-    if (g_debt < g_minDebt) {
+    if (g_debt < g_activeMinDebt) {
         g_debt  := 0.0
         g_timer := false
         SetTimer(AnimateScroll, 0)
         return
     }
 
-    chunk  := g_debt * (1.0 - g_friction)
+    chunk  := g_debt * (1.0 - g_activeFriction)
     g_debt -= chunk
 
     wheelDelta := Integer(Round(chunk * 120))

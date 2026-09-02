@@ -75,9 +75,16 @@ if (Test-Path $OutputExe) {
 }
 
 Write-Host "Compiling 64-bit Windows executable..."
-& $Compiler "/in" $SourceScript "/out" $OutputExe "/base" $BaseExecutable "/cp" "65001" "/silent" "verbose"
-if ($LASTEXITCODE -ne 0) {
-    throw "Ahk2Exe failed with exit code $LASTEXITCODE."
+$CompilerArguments = @(
+    "/in", ('"{0}"' -f $SourceScript),
+    "/out", ('"{0}"' -f $OutputExe),
+    "/base", ('"{0}"' -f $BaseExecutable),
+    "/cp", "65001",
+    "/silent", "verbose"
+)
+$CompilerProcess = Start-Process -FilePath $Compiler -ArgumentList $CompilerArguments -Wait -PassThru
+if ($CompilerProcess.ExitCode -ne 0) {
+    throw "Ahk2Exe failed with exit code $($CompilerProcess.ExitCode)."
 }
 
 if (-not (Test-Path $OutputExe)) {
