@@ -123,6 +123,18 @@ To start automatically with Windows: place a shortcut to the `.exe` in your Star
 3. Or right-click → **Compile Script** to produce your own `.exe`
 4. Open **Settings...** from the tray icon, or tune `SmoothScroll.ini` directly
 
+### Option C — Build a standalone Windows executable
+
+On a Windows 10 or 11 PC, double-click `build-windows.cmd`. It downloads verified copies of AutoHotkey v2 and the official Ahk2Exe compiler, then creates:
+
+```text
+dist\Smooth-Scroll-Acceleration.exe
+```
+
+The generated 64-bit executable runs without installing AutoHotkey. PowerShell 5.1 or later and an internet connection are required for the first build. Because the executable is not code-signed, Windows SmartScreen may show an unknown-publisher warning.
+
+The included GitHub Actions workflow also builds the executable automatically. Open a completed **Build Windows executable** workflow run and download the `Smooth-Scroll-Acceleration-Windows-x64` artifact.
+
 ---
 
 ## Requirements
